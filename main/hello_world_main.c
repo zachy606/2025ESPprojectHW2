@@ -5,6 +5,157 @@
 //  */
 
 
+#include <stdio.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#define N 4
+
+
+static int M1[N][N] = {
+    {1, 2, 2, 4}, 
+    {2, 2, 2, 2},
+    {2, 2, 2, 2},
+    {2, 2, 2, 2},
+};
+
+static int M2[N][N] = {
+    {3, 3, 3, 3}, 
+    {3, 3, 3, 3},
+    {3, 4, 3, 3},
+    {3, 3, 3, 3},
+};
+
+static int M3[N][N] = {
+    {0, 0, 0, 0}, 
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+};
+
+static int sum = 0;
+static SemaphoreHandle_t pos_mutex;
+static int cnt = 0;
+void Multiplication(void* arg) {
+   
+    xSemaphoreTake(pos_mutex, portMAX_DELAY);
+
+    for(int i=0;i<N;i++){//row
+        for(int j=0;j<N;j++){//col
+            M3[i][j] = 0;
+            for(int k=0;k<N;k++) {
+                
+                M3[i][j] += M1[i][k] * M2[k][j];
+            }
+        }
+    }
+    int core_id = esp_cpu_get_core_id();
+    printf("Task %s is calculating on Core%d\n", pcTaskGetName(NULL), core_id);
+
+    xSemaphoreGive(pos_mutex);
+
+    vTaskDelete(NULL);
+}
+
+void Summation(void* arg) {
+    
+    xSemaphoreTake(pos_mutex, portMAX_DELAY);
+    for(int i=0;i<N;i++){//row
+        for(int j=0;j<N;j++){//col
+            sum +=M3[i][j];
+        }
+    }
+    int core_id = esp_cpu_get_core_id();
+    printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
+           
+    xSemaphoreGive(pos_mutex);
+        
+    
+    vTaskDelete(NULL);
+}
+
+static int i=0,j=0,k=0;
+static int sumi=0,sumj=0;
+void task(void *arg){
+    int core_id = esp_cpu_get_core_id();
+    printf("Task %s create\n", pcTaskGetName(NULL));
+    
+    while(1){
+        if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
+            if(i==4)break;
+            core_id = esp_cpu_get_core_id();
+
+            M3[i][j] += M1[i][k] * M2[k][j];
+            k++;
+            if(k==4){
+                k=0;
+                j++;
+            }
+            if(j==4){
+                j=0;
+                i++;
+            }
+            printf("Task %s is multiplying on Core%d\n", pcTaskGetName(NULL), core_id);
+        }
+        xSemaphoreGive(pos_mutex);
+        vTaskDelay(pdMS_TO_TICKS(1));
+        // if(i==4)break;
+    }
+    xSemaphoreGive(pos_mutex);
+    while(1){
+        if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
+            if(sumi==4)break;
+            sum += M3[sumi][sumj];
+            sumj++;
+            if(sumj==4){
+                sumj=0;
+                sumi++;
+            }
+            printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
+        }
+        xSemaphoreGive(pos_mutex);
+        vTaskDelay(pdMS_TO_TICKS(1));
+        // if(sumi==4)break;
+    }
+    xSemaphoreGive(pos_mutex);
+    cnt++;
+    vTaskDelete(NULL);
+    
+}
+
+
+void app_main(void) {
+    pos_mutex = xSemaphoreCreateMutex();    
+    
+    // // create Multiplication tasks
+    // xTaskCreate(Multiplication, "multiplicationA", 2048, NULL, 1, NULL);
+    // xTaskCreate(Multiplication, "multiplicationB", 2048, NULL, 1, NULL);
+    
+
+    // // create Summation tasks
+    // xTaskCreate(Summation, "summationA", 2048, NULL, 1, NULL);
+    // xTaskCreate(Summation, "summationB", 2048, NULL, 1, NULL);
+
+
+    xTaskCreate(task, "taskA", 2048, NULL, 1, NULL);
+    xTaskCreate(task, "taskB", 2048, NULL, 1, NULL);
+
+    // print M3 and sum
+    while(cnt<2){
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    printf("M3: \n");
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < N; j++) {
+            printf("%2d ", M3[i][j]);
+        }
+        printf("\n");
+    }
+    printf("sum of elements of M3: %d\n", sum);
+}
+
+
 
 
 
@@ -55,134 +206,3 @@
 //     esp_restart();
 // }
 
-
-
-
-#include <stdio.h>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-#define N 4
-
-static int M1[N][N] = {
-    {2, 2, 2, 2}, 
-    {2, 2, 2, 2},
-    {2, 2, 2, 2},
-    {2, 2, 2, 2},
-};
-
-static int M2[N][N] = {
-    {3, 3, 3, 3}, 
-    {3, 3, 3, 3},
-    {3, 3, 3, 3},
-    {3, 3, 3, 3},
-};
-
-static int M3[N][N] = {
-    {2, 2, 2, 2}, 
-    {2, 2, 2, 2},
-    {2, 2, 2, 2},
-    {2, 2, 2, 2},
-};
-
-static int sum = 0;
-static SemaphoreHandle_t pos_mutex;
-
-void Multiplication(void* arg) {
-   
-    xSemaphoreTake(pos_mutex, portMAX_DELAY);
-
-    for(int i=0;i<N;i++){//row
-        for(int j=0;j<N;j++){//col
-            M3[i][j] = 0;
-            for(int k=0;k<N;k++) {
-                
-                M3[i][j] += M1[i][k] * M2[k][j];
-            }
-        }
-    }
-    int core_id = esp_cpu_get_core_id();
-    printf("Task %s is calculating on Core%d\n", pcTaskGetName(NULL), core_id);
-
-    xSemaphoreGive(pos_mutex);
-
-    vTaskDelete(NULL);
-}
-
-void Summation(void* arg) {
-    
-    xSemaphoreTake(pos_mutex, portMAX_DELAY);
-    for(int i=0;i<N;i++){//row
-        for(int j=0;j<N;j++){//col
-            sum +=M3[i][j];
-        }
-    }
-    int core_id = esp_cpu_get_core_id();
-    printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
-           
-    xSemaphoreGive(pos_mutex);
-        
-    
-    vTaskDelete(NULL);
-}
-
-void task(void *arg){
-    
-    xSemaphoreTake(pos_mutex, portMAX_DELAY);
-    for(int i=0;i<N;i++){//row
-        for(int j=0;j<N;j++){//col
-            M3[i][j] = 0;
-            for(int k=0;k<N;k++) {
-                
-                M3[i][j] += M1[i][k] * M2[k][j];
-            }
-        }
-    }
-    int core_id = esp_cpu_get_core_id();
-    printf("Task %s is calculating on Core%d\n", pcTaskGetName(NULL), core_id);
-
-    xSemaphoreGive(pos_mutex);
-
-    xSemaphoreTake(pos_mutex, portMAX_DELAY);
-    for(int i=0;i<N;i++){//row
-        for(int j=0;j<N;j++){//col
-            sum +=M3[i][j];
-        }
-    }
-    
-    core_id = esp_cpu_get_core_id();
-    printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
-           
-    xSemaphoreGive(pos_mutex);
-
-    vTaskDelete(NULL);
-}
-
-
-void app_main(void) {
-    pos_mutex = xSemaphoreCreateMutex();    
-    
-    // // create Multiplication tasks
-    // xTaskCreate(Multiplication, "multiplicationA", 2048, NULL, 1, NULL);
-    // xTaskCreate(Multiplication, "multiplicationB", 2048, NULL, 1, NULL);
-    
-
-    // // create Summation tasks
-    // xTaskCreate(Summation, "summationA", 2048, NULL, 1, NULL);
-    // xTaskCreate(Summation, "summationB", 2048, NULL, 1, NULL);
-
-
-    xTaskCreate(task, "taskA", 2048, NULL, 1, NULL);
-    xTaskCreate(task, "taskB", 2048, NULL, 1, NULL);
-
-    // print M3 and sum
-    printf("M3: \n");
-    for(int i = 0; i < N; i++) {
-        for(int j = 0; j < N; j++) {
-            printf("%2d ", M3[i][j]);
-        }
-        printf("\n");
-    }
-    printf("sum of elements of M3: %d\n", sum);
-}
