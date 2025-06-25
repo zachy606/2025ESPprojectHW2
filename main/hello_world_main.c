@@ -137,8 +137,6 @@ void app_main(void) {
     }
     printf("sum of elements of M3: %d\n", sum);
 }
-LLL
-
 
 
 
