@@ -37,46 +37,9 @@ static int M3[N][N] = {
 static int sum = 0;
 static SemaphoreHandle_t pos_mutex;
 static int cnt = 0;
-void Multiplication(void* arg) {
-   
-    xSemaphoreTake(pos_mutex, portMAX_DELAY);
-
-    for(int i=0;i<N;i++){//row
-        for(int j=0;j<N;j++){//col
-            M3[i][j] = 0;
-            for(int k=0;k<N;k++) {
-                
-                M3[i][j] += M1[i][k] * M2[k][j];
-            }
-        }
-    }
-    int core_id = esp_cpu_get_core_id();
-    printf("Task %s is calculating on Core%d\n", pcTaskGetName(NULL), core_id);
-
-    xSemaphoreGive(pos_mutex);
-
-    vTaskDelete(NULL);
-}
-
-void Summation(void* arg) {
-    
-    xSemaphoreTake(pos_mutex, portMAX_DELAY);
-    for(int i=0;i<N;i++){//row
-        for(int j=0;j<N;j++){//col
-            sum +=M3[i][j];
-        }
-    }
-    int core_id = esp_cpu_get_core_id();
-    printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
-           
-    xSemaphoreGive(pos_mutex);
-        
-    
-    vTaskDelete(NULL);
-}
-
 static int i=0,j=0,k=0;
 static int sumi=0,sumj=0;
+
 void task(void *arg){
     int core_id = esp_cpu_get_core_id();
     printf("Task %s create\n", pcTaskGetName(NULL));
