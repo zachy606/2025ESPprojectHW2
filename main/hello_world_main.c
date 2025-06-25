@@ -37,7 +37,7 @@ static int M3[N][N] = {
 static int sum = 0;
 static SemaphoreHandle_t pos_mutex;
 static int cnt = 0;
-static int i=0,j=0,k=0;
+static int i=0,j=0;
 static int sumi=0,sumj=0;
 
 void task(void *arg){
@@ -45,16 +45,14 @@ void task(void *arg){
     printf("Task %s create\n", pcTaskGetName(NULL));
     
     while(1){
+        int locali=0,localj=0;
         if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
             if(i==4)break;
+            locali = i;
+            localj = j;
             core_id = esp_cpu_get_core_id();
 
-            M3[i][j] += M1[i][k] * M2[k][j];
-            k++;
-            if(k==4){
-                k=0;
-                j++;
-            }
+            j++;
             if(j==4){
                 j=0;
                 i++;
@@ -62,24 +60,35 @@ void task(void *arg){
             printf("Task %s is multiplying on Core%d\n", pcTaskGetName(NULL), core_id);
         }
         xSemaphoreGive(pos_mutex);
-        vTaskDelay(pdMS_TO_TICKS(1));
+        for(int k=0;k<N;k++){
+                M3[locali][localj] += M1[locali][k] * M2[k][localj];
+        }
+        
+
+        // vTaskDelay(pdMS_TO_TICKS(1));
         // if(i==4)break;
     }
+
     xSemaphoreGive(pos_mutex);
+
     while(1){
+        int locali=0,localj=0;
         if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
             if(sumi==4)break;
-            sum += M3[sumi][sumj];
+            locali = sumi;
+            localj = sumj;
             sumj++;
             if(sumj==4){
                 sumj=0;
                 sumi++;
             }
             printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
+
         }
         xSemaphoreGive(pos_mutex);
-        vTaskDelay(pdMS_TO_TICKS(1));
-        // if(sumi==4)break;
+        sum += M3[locali][localj];
+        // vTaskDelay(pdMS_TO_TICKS(1));
+
     }
     xSemaphoreGive(pos_mutex);
     cnt++;
