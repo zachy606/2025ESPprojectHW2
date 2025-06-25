@@ -36,6 +36,8 @@ static int M3[N][N] = {
 
 static int sum = 0;
 static SemaphoreHandle_t pos_mutex;
+
+static portMUX_TYPE s_spinlock = portMUX_INITIALIZER_UNLOCKED;
 static int cnt = 0;
 static int i=0,j=0;
 static int sumi=0,sumj=0;
@@ -46,19 +48,23 @@ void task(void *arg){
     
     while(1){
         int locali=0,localj=0;
-        if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
+        // if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
+            portENTER_CRITICAL(&s_spinlock);
             if(i==4)break;
             locali = i;
             localj = j;
-            core_id = esp_cpu_get_core_id();
+            
 
             j++;
             if(j==4){
                 j=0;
                 i++;
             }
-            printf("Task %s is multiplying on Core%d\n", pcTaskGetName(NULL), core_id);
-        }
+            
+        // }
+        portEXIT_CRITICAL(&s_spinlock);
+        core_id = esp_cpu_get_core_id();
+        printf("Task %s is multiplying on Core%d\n", pcTaskGetName(NULL), core_id);
         xSemaphoreGive(pos_mutex);
         for(int k=0;k<N;k++){
                 M3[locali][localj] += M1[locali][k] * M2[k][localj];
@@ -69,11 +75,13 @@ void task(void *arg){
         // if(i==4)break;
     }
 
-    xSemaphoreGive(pos_mutex);
+    // xSemaphoreGive(pos_mutex);
+    portEXIT_CRITICAL(&s_spinlock);
 
     while(1){
         int locali=0,localj=0;
-        if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
+        portENTER_CRITICAL(&s_spinlock);
+        // if(xSemaphoreTake(pos_mutex, portMAX_DELAY)==pdTRUE){
             if(sumi==4)break;
             locali = sumi;
             localj = sumj;
@@ -82,15 +90,18 @@ void task(void *arg){
                 sumj=0;
                 sumi++;
             }
-            printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
+            
 
-        }
-        xSemaphoreGive(pos_mutex);
+        // }
+        // xSemaphoreGive(pos_mutex);
+        portEXIT_CRITICAL(&s_spinlock);
+        printf("Task %s is summing on Core%d\n", pcTaskGetName(NULL), core_id);
         sum += M3[locali][localj];
         // vTaskDelay(pdMS_TO_TICKS(1));
 
     }
-    xSemaphoreGive(pos_mutex);
+    // xSemaphoreGive(pos_mutex);
+    portEXIT_CRITICAL(&s_spinlock);
     cnt++;
     vTaskDelete(NULL);
     
